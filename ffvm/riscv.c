@@ -105,6 +105,10 @@ uint32_t  get_tick_count() {
     return theTick;
 }
 
+void SetConsoleCursorPosition(int XPos, int YPos) {
+    printf("\033[%d;%dH",YPos+1,XPos+1);
+}
+
 typedef struct {
     uint32_t pc;
     uint32_t x[32];
@@ -183,7 +187,7 @@ static void riscv_memw32(RISCV *riscv, uint32_t addr, uint32_t data)
     case 0xF0000108:
         coord.X = (data >> 0 ) & 0xFFFF;
         coord.Y = (data >> 16) & 0xFFFF;
-        // SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+        SetConsoleCursorPosition(coord.X,coord.Y);
         break;
     }
     if (addr >= 0xF0000000) return;

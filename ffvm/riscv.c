@@ -1,9 +1,9 @@
-#include <windows.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <conio.h>
 
 #ifdef WIN32
+#include <windows.h>
+#include <conio.h>
 #pragma warning(disable:4996) // disable warnings
 typedef unsigned long long uint64_t;
 typedef long long           int64_t;
@@ -17,7 +17,93 @@ typedef char                int8_t;
 #define usleep(t)      Sleep((t)/1000)
 #else
 #include <stdint.h>
+#include <string.h>
+#include <termios.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <time.h>
 #endif
+
+static struct termios old, current;
+
+/* Initialize new terminal i/o settings */
+void initTermios(int echo) 
+{
+  tcgetattr(0, &old); /* grab old terminal i/o settings */
+  current = old; /* make new settings same as old settings */
+  current.c_lflag &= ~ICANON; /* disable buffered i/o */
+  if (echo) {
+      current.c_lflag |= ECHO; /* set echo mode */
+  } else {
+      current.c_lflag &= ~ECHO; /* set no echo mode */
+  }
+  tcsetattr(0, TCSANOW, &current); /* use these new terminal i/o settings now */
+}
+
+/* Restore old terminal i/o settings */
+void resetTermios(void) 
+{
+  tcsetattr(0, TCSANOW, &old);
+}
+
+/* Read 1 character - echo defines echo mode */
+char getch_(int echo) 
+{
+  char ch;
+  initTermios(echo);
+  ch = getchar();
+  resetTermios();
+  return ch;
+}
+
+/* Read 1 character without echo */
+char getch(void) 
+{
+  return getch_(0);
+}
+
+/* Read 1 character with echo */
+char getche(void) 
+{
+  return getch_(1);
+}
+
+int kbhit(void)
+{
+  struct termios oldt, newt;
+  int ch;
+  int oldf;
+ 
+  tcgetattr(STDIN_FILENO, &oldt);
+  newt = oldt;
+  newt.c_lflag &= ~(ICANON | ECHO);
+  tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+  oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
+  fcntl(STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK);
+ 
+  ch = getchar();
+ 
+  tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+  fcntl(STDIN_FILENO, F_SETFL, oldf);
+ 
+  if(ch != EOF)
+  {
+    ungetc(ch, stdin);
+    return 1;
+  }
+ 
+  return 0;
+}
+
+uint32_t  get_tick_count() {
+    struct timespec ts;
+    unsigned theTick = 0U;
+    clock_gettime( CLOCK_REALTIME, &ts );
+    theTick  = ts.tv_nsec / 1000000;
+    theTick += ts.tv_sec * 1000;
+    return theTick;
+}
 
 typedef struct {
     uint32_t pc;
@@ -31,6 +117,11 @@ typedef struct {
     #define TS_EXIT (1 << 0)
     uint32_t status;
 } RISCV;
+
+typedef struct _COORD {
+  int16_t X;
+  int16_t Y;
+} COORD, *PCOORD;
 
 static uint8_t riscv_memr8(RISCV *riscv, uint32_t addr)
 {
@@ -92,7 +183,7 @@ static void riscv_memw32(RISCV *riscv, uint32_t addr, uint32_t data)
     case 0xF0000108:
         coord.X = (data >> 0 ) & 0xFFFF;
         coord.Y = (data >> 16) & 0xFFFF;
-        SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+        // SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
         break;
     }
     if (addr >= 0xF0000000) return;
@@ -474,7 +565,7 @@ void riscv_free(RISCV *riscv) { free(riscv); }
 
 int main(int argc, char *argv[])
 {
-    char romfile[MAX_PATH] = "test.rom";
+    char romfile[FILENAME_MAX] = "test.rom";
     uint32_t next_tick = 0;
     int32_t  sleep_tick, i;
     RISCV    *riscv = NULL;

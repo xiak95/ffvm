@@ -1,30 +1,13 @@
 #include <stdlib.h>
 #include <stdio.h>
-
-#ifdef WIN32
-#include <windows.h>
-#include <conio.h>
-#pragma warning(disable:4996) // disable warnings
-typedef unsigned long long uint64_t;
-typedef long long           int64_t;
-typedef unsigned           uint32_t;
-typedef int                 int32_t;
-typedef unsigned short     uint16_t;
-typedef short               int16_t;
-typedef unsigned char      uint8_t;
-typedef char                int8_t;
-#define get_tick_count GetTickCount
-#define usleep(t)      Sleep((t)/1000)
-#else
-#include <stdint.h>
 #include <string.h>
-#include <termios.h>
-#include <stdio.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
-#endif
 
+#include <termios.h>
+#include <SDL2/SDL.h>
 static struct termios old, current;
 
 /* Initialize new terminal i/o settings */
@@ -39,6 +22,21 @@ void initTermios(int echo)
       current.c_lflag &= ~ECHO; /* set no echo mode */
   }
   tcsetattr(0, TCSANOW, &current); /* use these new terminal i/o settings now */
+}
+
+void init_video() {
+    //Create a basic SDL env
+    SDL_Event event;
+    SDL_Renderer *renderer;
+    SDL_Window *window;
+
+    SDL_Init(SDL_INIT_VIDEO);
+    SDL_CreateWindowAndRenderer(640, 480, 0, &window, &renderer);
+    SDL_RenderSetScale(renderer, 8, 8);
+    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+    SDL_RenderClear(renderer);
+    SDL_RenderPresent(renderer);
+
 }
 
 /* Restore old terminal i/o settings */
@@ -576,6 +574,7 @@ int main(int argc, char *argv[])
 
     if (argc >= 2) strncpy(romfile, argv[1], sizeof(romfile));
     riscv = riscv_init(romfile);
+    init_video();
     if (!riscv) return 0;
 
     while (!(riscv->status & (TS_EXIT))) {
@@ -585,6 +584,15 @@ int main(int argc, char *argv[])
             riscv_run(riscv);
         }
         sleep_tick = next_tick - get_tick_count();
+
+
+    SDL_Event event;
+    if (SDL_PollEvent(&event)) {
+       //User requests quit
+        if( event.type == SDL_QUIT )
+            return 0;
+    }
+
         if (sleep_tick > 0) usleep(sleep_tick * 1000);
 //      printf("sleep_tick: %d\n", sleep_tick);
     }
